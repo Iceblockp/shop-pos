@@ -1,33 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
-import {
-  useDatabase,
-  Product,
-  Transaction,
-  TransactionItem,
-} from "../context/DatabaseContext";
-import {
-  Search,
-  Plus,
-  Minus,
-  Trash2,
-  CreditCard,
-  DollarSign,
-  Printer,
-  Package,
-} from "lucide-react";
-import { toast } from "react-toastify";
+import { Search, CreditCard, DollarSign, ShoppingCart } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
-
-interface CartItem extends Product {
-  quantity: number;
-  total: number;
-}
+import { Product } from "../context/DatabaseContext";
+import { useSales, CartItem } from "../hooks/useSales";
+import { ProductCard } from "../components/ProductCard";
+import { CartItem as CartItemComponent } from "../components/CartItem";
+import { Receipt } from "../components/Receipt";
+import { ProductWithStock } from "../hooks/useInventory";
+import { useSettings } from "../hooks/useSettings";
 
 const Sales: React.FC = () => {
-  const { db, isLoading } = useDatabase();
+  const { products, categories, isLoading, processCheckout } = useSales();
   const [searchTerm, setSearchTerm] = useState("");
-  const [products, setProducts] = useState<Product[]>([]);
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<ProductWithStock[]>(
+    []
+  );
   const [cart, setCart] = useState<CartItem[]>([]);
   const [subtotal, setSubtotal] = useState(0);
   const [tax, setTax] = useState(0);
@@ -35,38 +22,10 @@ const Sales: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [customerName, setCustomerName] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
-  const [paymentStatus, setPaymentStatus] = useState<"paid" | "pending">(
-    "paid"
-  );
-  const [categories, setCategories] = useState<{ id: number; name: string }[]>(
-    []
-  );
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
+  const { businessSettings } = useSettings();
 
   const receiptRef = useRef<HTMLDivElement>(null);
-
-  // Load products and categories
-  useEffect(() => {
-    const loadData = async () => {
-      if (!db) return;
-
-      try {
-        const productsData = await db.getAll("products");
-        setProducts(productsData);
-        setFilteredProducts(productsData);
-
-        const categoriesData = await db.getAll("categories");
-        setCategories(categoriesData.map((c) => ({ id: c.id!, name: c.name })));
-      } catch (error) {
-        console.error("Error loading products:", error);
-        toast.error("Failed to load products.");
-      }
-    };
-
-    if (db && !isLoading) {
-      loadData();
-    }
-  }, [db, isLoading]);
 
   // Filter products based on search and category
   useEffect(() => {
@@ -103,52 +62,43 @@ const Sales: React.FC = () => {
 
   const addToCart = (product: Product) => {
     setCart((prevCart) => {
-      // Check if product is already in cart
       const existingItemIndex = prevCart.findIndex(
         (item) => item.id === product.id
       );
 
       if (existingItemIndex >= 0) {
-        // Update quantity if product is already in cart
         const updatedCart = [...prevCart];
         const item = updatedCart[existingItemIndex];
         item.quantity += 1;
         item.total = item.price * item.quantity;
         return updatedCart;
-      } else {
-        // Add new product to cart
-        return [
-          ...prevCart,
-          {
-            ...product,
-            quantity: 1,
-            total: product.price,
-          },
-        ];
       }
+
+      return [
+        ...prevCart,
+        {
+          ...product,
+          quantity: 1,
+          total: product.price,
+        },
+      ];
     });
   };
 
   const updateQuantity = (id: number | undefined, newQuantity: number) => {
     if (newQuantity < 1 || !id) return;
 
-    setCart((prevCart) => {
-      return prevCart.map((item) => {
-        if (item.id === id) {
-          return {
-            ...item,
-            quantity: newQuantity,
-            total: item.price * newQuantity,
-          };
-        }
-        return item;
-      });
-    });
+    setCart((prevCart) =>
+      prevCart.map((item) =>
+        item.id === id
+          ? { ...item, quantity: newQuantity, total: item.price * newQuantity }
+          : item
+      )
+    );
   };
 
   const removeFromCart = (id: number | undefined) => {
     if (!id) return;
-
     setCart((prevCart) => prevCart.filter((item) => item.id !== id));
   };
 
@@ -161,82 +111,24 @@ const Sales: React.FC = () => {
     setDiscount(0);
     setCustomerName("");
     setPaymentMethod("cash");
-    setPaymentStatus("paid");
   };
 
   const handleCheckout = async () => {
-    if (cart.length === 0) {
-      toast.warning("Cart is empty. Add items before checkout.");
-      return;
-    }
+    if (cart.length === 0) return;
 
-    if (!db) {
-      toast.error("Database not available.");
-      return;
-    }
+    const success = await processCheckout({
+      cart,
+      total,
+      tax,
+      discount,
+      paymentMethod,
+      paymentStatus: "paid",
+      customerName,
+    });
 
-    try {
-      // Create transaction
-      const transaction: Omit<Transaction, "id"> = {
-        total,
-        tax,
-        discount,
-        paymentMethod,
-        paymentStatus,
-        customerName: customerName || undefined,
-        notes: "",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      // Start a transaction to ensure data consistency
-      const tx = db.transaction(
-        ["transactions", "transactionItems", "stock"],
-        "readwrite"
-      );
-
-      // Add transaction
-      const transactionId = await tx
-        .objectStore("transactions")
-        .add(transaction);
-
-      // Add transaction items
-      const itemsStore = tx.objectStore("transactionItems");
-      const stockStore = tx.objectStore("stock");
-      const stockIndex = stockStore.index("by-product");
-
-      for (const item of cart) {
-        // Add transaction item
-        await itemsStore.add({
-          transactionId,
-          productId: item.id!,
-          quantity: item.quantity,
-          price: item.price,
-          discount: 0,
-          total: item.total,
-          createdAt: new Date(),
-        });
-
-        // Update stock
-        const stockItem = await stockIndex.get(item.id!);
-        if (stockItem) {
-          await stockStore.put({
-            ...stockItem,
-            quantity: stockItem.quantity - item.quantity,
-            updatedAt: new Date(),
-          });
-        }
-      }
-
-      // Commit transaction
-      await tx.done;
-
-      toast.success("Sale completed successfully.");
+    if (success) {
       handlePrint();
       clearCart();
-    } catch (error) {
-      console.error("Error during checkout:", error);
-      toast.error("Failed to complete sale. Please try again.");
     }
   };
 
@@ -290,36 +182,11 @@ const Sales: React.FC = () => {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-4 overflow-y-auto">
               {filteredProducts.length > 0 ? (
                 filteredProducts.map((product) => (
-                  <div
+                  <ProductCard
                     key={product.id}
-                    className="bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm hover:shadow transition-shadow cursor-pointer flex flex-col"
-                    onClick={() => addToCart(product)}
-                  >
-                    <div className="w-full h-32 bg-gray-100 flex items-center justify-center overflow-hidden">
-                      {product.imageUrl ? (
-                        <img
-                          src={product.imageUrl}
-                          alt={product.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <Package className="w-10 h-10 text-gray-400" />
-                      )}
-                    </div>
-                    <div className="p-3">
-                      <h3 className="font-medium text-sm line-clamp-1">
-                        {product.name}
-                      </h3>
-                      <div className="mt-1 flex justify-between items-center">
-                        <span className="text-blue-600 font-semibold">
-                          ${product.price.toFixed(2)}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          Stock: {product.id}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                    product={product}
+                    onSelect={addToCart}
+                  />
                 ))
               ) : (
                 <div className="col-span-full flex flex-col items-center justify-center py-8 text-gray-500">
@@ -341,46 +208,12 @@ const Sales: React.FC = () => {
             {cart.length > 0 ? (
               <div className="space-y-3">
                 {cart.map((item) => (
-                  <div
+                  <CartItemComponent
                     key={item.id}
-                    className="flex items-center justify-between p-3 border border-gray-200 rounded-md"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-medium text-gray-900 truncate">
-                        {item.name}
-                      </h3>
-                      <p className="text-sm text-gray-500">
-                        ${item.price.toFixed(2)} each
-                      </p>
-                    </div>
-                    <div className="flex items-center ml-4">
-                      <button
-                        className="p-1 text-gray-400 hover:text-gray-600"
-                        onClick={() =>
-                          updateQuantity(item.id, item.quantity - 1)
-                        }
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <span className="mx-2 w-8 text-center">
-                        {item.quantity}
-                      </span>
-                      <button
-                        className="p-1 text-gray-400 hover:text-gray-600"
-                        onClick={() =>
-                          updateQuantity(item.id, item.quantity + 1)
-                        }
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                      <button
-                        className="ml-3 p-1 text-red-400 hover:text-red-600"
-                        onClick={() => removeFromCart(item.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
+                    item={item}
+                    onUpdateQuantity={updateQuantity}
+                    onRemove={removeFromCart}
+                  />
                 ))}
               </div>
             ) : (
@@ -392,22 +225,29 @@ const Sales: React.FC = () => {
           </div>
 
           <div className="p-4 bg-gray-50 border-t border-gray-200">
+            {/* Cart Summary */}
+            // Update the cart summary section
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Subtotal:</span>
                 <span className="text-sm font-medium">
-                  ${subtotal.toFixed(2)}
+                  {businessSettings.currencySymbol}
+                  {subtotal.toFixed(2)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Tax (10%):</span>
-                <span className="text-sm font-medium">${tax.toFixed(2)}</span>
+                <span className="text-sm font-medium">
+                  {businessSettings.currencySymbol}
+                  {tax.toFixed(2)}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Discount:</span>
                 <div className="flex items-center">
                   <span className="text-sm font-medium">
-                    ${discount.toFixed(2)}
+                    {businessSettings.currencySymbol}
+                    {discount.toFixed(2)}
                   </span>
                   <button
                     className="ml-2 text-xs text-blue-600 hover:text-blue-800"
@@ -428,11 +268,12 @@ const Sales: React.FC = () => {
               <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
                 <span className="text-base font-medium">Total:</span>
                 <span className="text-xl font-semibold text-blue-600">
-                  ${total.toFixed(2)}
+                  {businessSettings.currencySymbol}
+                  {total.toFixed(2)}
                 </span>
               </div>
             </div>
-
+            {/* Checkout Form */}
             <div className="mt-4 space-y-3">
               <input
                 type="text"
@@ -487,86 +328,21 @@ const Sales: React.FC = () => {
         </div>
       </div>
 
-      {/* Receipt Template (hidden) */}
+      {/* Hidden Receipt Template */}
       <div className="hidden">
-        <div ref={receiptRef} className="p-8 max-w-md mx-auto bg-white">
-          <div className="text-center mb-6">
-            <h2 className="text-xl font-bold">Mini Market POS</h2>
-            <p className="text-gray-500">123 Market Street</p>
-            <p className="text-gray-500">Tel: (123) 456-7890</p>
-          </div>
-
-          <div className="mb-4">
-            <div className="flex justify-between text-sm">
-              <span>Date:</span>
-              <span>{new Date().toLocaleString()}</span>
-            </div>
-            {customerName && (
-              <div className="flex justify-between text-sm">
-                <span>Customer:</span>
-                <span>{customerName}</span>
-              </div>
-            )}
-          </div>
-
-          <div className="border-t border-b border-gray-200 py-2 mb-4">
-            <div className="flex justify-between text-sm font-semibold mb-2">
-              <span>Item</span>
-              <div className="flex space-x-4">
-                <span className="w-10 text-right">Qty</span>
-                <span className="w-14 text-right">Price</span>
-                <span className="w-16 text-right">Total</span>
-              </div>
-            </div>
-
-            {cart.map((item) => (
-              <div key={item.id} className="flex justify-between text-sm mb-1">
-                <span className="flex-1">{item.name}</span>
-                <div className="flex space-x-4">
-                  <span className="w-10 text-right">{item.quantity}</span>
-                  <span className="w-14 text-right">
-                    ${item.price.toFixed(2)}
-                  </span>
-                  <span className="w-16 text-right">
-                    ${item.total.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mb-6">
-            <div className="flex justify-between mb-1 text-sm">
-              <span>Subtotal:</span>
-              <span>${subtotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between mb-1 text-sm">
-              <span>Tax (10%):</span>
-              <span>${tax.toFixed(2)}</span>
-            </div>
-            {discount > 0 && (
-              <div className="flex justify-between mb-1 text-sm">
-                <span>Discount:</span>
-                <span>-${discount.toFixed(2)}</span>
-              </div>
-            )}
-            <div className="flex justify-between font-bold mt-2">
-              <span>Total:</span>
-              <span>${total.toFixed(2)}</span>
-            </div>
-          </div>
-
-          <div className="text-center text-gray-500 text-sm mt-6">
-            <p>Thank you for shopping with us!</p>
-            <p>Please come again</p>
-          </div>
+        <div ref={receiptRef}>
+          <Receipt
+            cart={cart}
+            subtotal={subtotal}
+            tax={tax}
+            discount={discount}
+            total={total}
+            customerName={customerName}
+          />
         </div>
       </div>
     </div>
   );
 };
-
-// Import ShoppingCart icon used in the empty cart message
-import { ShoppingCart } from "lucide-react";
 
 export default Sales;

@@ -1,44 +1,70 @@
-import React, { useState, useEffect } from 'react';
-import { useDatabase, Transaction } from '../context/DatabaseContext';
-import { Search, Filter, CreditCard, DollarSign, Calendar, ArrowDownWideNarrow, ArrowUpWideNarrow, ClipboardList, Printer } from 'lucide-react';
-import { format } from 'date-fns';
-import { toast } from 'react-toastify';
+import React, { useState, useEffect, useRef } from "react";
+import {
+  useDatabase,
+  Transaction,
+  TransactionItem,
+} from "../context/DatabaseContext";
+import { useSettings } from "../hooks/useSettings";
+import {
+  Search,
+  Filter,
+  CreditCard,
+  DollarSign,
+  Calendar,
+  ArrowDownWideNarrow,
+  ArrowUpWideNarrow,
+  ClipboardList,
+  Printer,
+} from "lucide-react";
+import { format } from "date-fns";
+import { toast } from "react-toastify";
+import { Voucher } from "../components/Voucher";
+import { useReactToPrint } from "react-to-print";
 
 // TransactionDetails component
 interface TransactionDetailsProps {
   transactionId: number;
   onClose: () => void;
-  onPrint: () => void;
 }
 
-const TransactionDetails: React.FC<TransactionDetailsProps> = ({ 
-  transactionId, onClose, onPrint 
+export interface ItemsWithProducts extends TransactionItem {
+  product?: any;
+  productName?: string;
+}
+
+const TransactionDetails: React.FC<TransactionDetailsProps> = ({
+  transactionId,
+  onClose,
 }) => {
   const { db } = useDatabase();
-  const [transaction, setTransaction] = useState<Transaction | null>(null);
-  const [items, setItems] = useState<any[]>([]);
+  const { businessSettings } = useSettings();
+  const [transaction, setTransaction] = useState<Transaction | undefined>(
+    undefined
+  );
+  const [items, setItems] = useState<ItemsWithProducts[]>([]);
   const [loading, setLoading] = useState(true);
-  
+  const receiptRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const loadTransactionDetails = async () => {
       if (!db) return;
-      
+
       try {
         setLoading(true);
-        
+
         // Get transaction
-        const tx = await db.get('transactions', transactionId);
+        const tx = await db.get("transactions", transactionId);
         setTransaction(tx);
-        
+
         // Get transaction items
-        const txItemsTx = db.transaction('transactionItems', 'readonly');
-        const txItemsIndex = txItemsTx.store.index('by-transaction');
+        const txItemsTx = db.transaction("transactionItems", "readonly");
+        const txItemsIndex = txItemsTx.store.index("by-transaction");
         const txItems = await txItemsIndex.getAll(transactionId);
-        
+
         // Get products for each item
         const productsMap = new Map();
-        const productsTx = db.transaction('products', 'readonly');
-        
+        const productsTx = db.transaction("products", "readonly");
+
         for (const item of txItems) {
           if (!productsMap.has(item.productId)) {
             const product = await productsTx.store.get(item.productId);
@@ -47,26 +73,31 @@ const TransactionDetails: React.FC<TransactionDetailsProps> = ({
             }
           }
         }
-        
+
         // Combine items with product data
-        const itemsWithProducts = txItems.map(item => ({
+        const itemsWithProducts: ItemsWithProducts[] = txItems.map((item) => ({
           ...item,
           product: productsMap.get(item.productId),
-          productName: productsMap.get(item.productId)?.name || 'Unknown Product'
+          productName:
+            productsMap.get(item.productId)?.name || "Unknown Product",
         }));
-        
+
         setItems(itemsWithProducts);
       } catch (error) {
-        console.error('Error loading transaction details:', error);
-        toast.error('Failed to load transaction details.');
+        console.error("Error loading transaction details:", error);
+        toast.error("Failed to load transaction details.");
       } finally {
         setLoading(false);
       }
     };
-    
+
     loadTransactionDetails();
   }, [db, transactionId]);
-  
+
+  const handlePrint = useReactToPrint({
+    content: () => receiptRef.current,
+  });
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -78,17 +109,14 @@ const TransactionDetails: React.FC<TransactionDetailsProps> = ({
       </div>
     );
   }
-  
+
   if (!transaction) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-lg shadow-xl p-6">
           <p className="text-center text-red-600">Transaction not found</p>
           <div className="mt-4 flex justify-center">
-            <button
-              className="btn-secondary"
-              onClick={onClose}
-            >
+            <button className="btn-secondary" onClick={onClose}>
               Close
             </button>
           </div>
@@ -96,7 +124,7 @@ const TransactionDetails: React.FC<TransactionDetailsProps> = ({
       </div>
     );
   }
-  
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -105,7 +133,7 @@ const TransactionDetails: React.FC<TransactionDetailsProps> = ({
           <div className="flex space-x-2">
             <button
               className="p-2 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-100"
-              onClick={onPrint}
+              onClick={handlePrint}
               title="Print Receipt"
             >
               <Printer className="w-5 h-5" />
@@ -116,13 +144,23 @@ const TransactionDetails: React.FC<TransactionDetailsProps> = ({
               title="Close"
             >
               <span className="sr-only">Close</span>
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
         </div>
-        
+
         <div className="mb-6">
           <div className="bg-gray-50 p-4 rounded-lg space-y-2">
             <div className="flex justify-between">
@@ -131,16 +169,21 @@ const TransactionDetails: React.FC<TransactionDetailsProps> = ({
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Date:</span>
-              <span>{format(new Date(transaction.createdAt), 'MMM d, yyyy h:mm a')}</span>
+              <span>
+                {format(new Date(transaction.createdAt), "MMM d, yyyy h:mm a")}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Total:</span>
-              <span className="font-semibold">${transaction.total.toFixed(2)}</span>
+              <span className="font-semibold">
+                {businessSettings.currencySymbol}
+                {transaction.total.toFixed(2)}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Payment Method:</span>
               <span className="flex items-center">
-                {transaction.paymentMethod === 'cash' ? (
+                {transaction.paymentMethod === "cash" ? (
                   <>
                     <DollarSign className="w-4 h-4 mr-1 text-green-600" />
                     Cash
@@ -155,14 +198,17 @@ const TransactionDetails: React.FC<TransactionDetailsProps> = ({
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Status:</span>
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                transaction.paymentStatus === 'paid' 
-                  ? 'bg-green-100 text-green-800' 
-                  : transaction.paymentStatus === 'pending'
-                  ? 'bg-yellow-100 text-yellow-800'
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                {transaction.paymentStatus.charAt(0).toUpperCase() + transaction.paymentStatus.slice(1)}
+              <span
+                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  transaction.paymentStatus === "paid"
+                    ? "bg-green-100 text-green-800"
+                    : transaction.paymentStatus === "pending"
+                    ? "bg-yellow-100 text-yellow-800"
+                    : "bg-red-100 text-red-800"
+                }`}
+              >
+                {transaction.paymentStatus.charAt(0).toUpperCase() +
+                  transaction.paymentStatus.slice(1)}
               </span>
             </div>
             {transaction.customerName && (
@@ -173,7 +219,7 @@ const TransactionDetails: React.FC<TransactionDetailsProps> = ({
             )}
           </div>
         </div>
-        
+
         <h3 className="font-medium text-lg mb-3">Items</h3>
         <div className="overflow-x-auto mb-4">
           <table className="min-w-full divide-y divide-gray-200">
@@ -194,69 +240,119 @@ const TransactionDetails: React.FC<TransactionDetailsProps> = ({
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {items.map(item => (
+              {items.map((item) => (
                 <tr key={item.id}>
                   <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
                     {item.productName}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 text-right">
-                    ${item.price.toFixed(2)}
+                    {businessSettings.currencySymbol}
+                    {item.price.toFixed(2)}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 text-right">
                     {item.quantity}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 font-medium text-right">
-                    ${item.total.toFixed(2)}
+                    {businessSettings.currencySymbol}
+                    {item.total.toFixed(2)}
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot className="bg-gray-50">
               <tr>
-                <th colSpan={2} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  colSpan={2}
+                  className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
                   Subtotal
                 </th>
-                <th colSpan={2} className="px-3 py-2 text-right text-xs font-medium text-gray-900">
-                  ${(transaction.total - transaction.tax + transaction.discount).toFixed(2)}
+                <th
+                  colSpan={2}
+                  className="px-3 py-2 text-right text-xs font-medium text-gray-900"
+                >
+                  {businessSettings.currencySymbol}
+                  {(
+                    transaction.total -
+                    transaction.tax +
+                    transaction.discount
+                  ).toFixed(2)}
                 </th>
               </tr>
               <tr>
-                <th colSpan={2} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  colSpan={2}
+                  className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
                   Tax
                 </th>
-                <th colSpan={2} className="px-3 py-2 text-right text-xs font-medium text-gray-900">
-                  ${transaction.tax.toFixed(2)}
+                <th
+                  colSpan={2}
+                  className="px-3 py-2 text-right text-xs font-medium text-gray-900"
+                >
+                  {businessSettings.currencySymbol}
+                  {transaction.tax.toFixed(2)}
                 </th>
               </tr>
               {transaction.discount > 0 && (
                 <tr>
-                  <th colSpan={2} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    colSpan={2}
+                    className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Discount
                   </th>
-                  <th colSpan={2} className="px-3 py-2 text-right text-xs font-medium text-gray-900">
-                    -${transaction.discount.toFixed(2)}
+                  <th
+                    colSpan={2}
+                    className="px-3 py-2 text-right text-xs font-medium text-gray-900"
+                  >
+                    -{businessSettings.currencySymbol}
+                    {transaction.discount.toFixed(2)}
                   </th>
                 </tr>
               )}
               <tr>
-                <th colSpan={2} className="px-3 py-2 text-left text-sm font-medium text-gray-900 uppercase tracking-wider">
+                <th
+                  colSpan={2}
+                  className="px-3 py-2 text-left text-sm font-medium text-gray-900 uppercase tracking-wider"
+                >
                   Total
                 </th>
-                <th colSpan={2} className="px-3 py-2 text-right text-sm font-medium text-gray-900">
-                  ${transaction.total.toFixed(2)}
+                <th
+                  colSpan={2}
+                  className="px-3 py-2 text-right text-sm font-medium text-gray-900"
+                >
+                  {businessSettings.currencySymbol}
+                  {transaction.total.toFixed(2)}
                 </th>
               </tr>
             </tfoot>
           </table>
         </div>
-        
+
         <div className="mt-5 flex justify-end">
-          <button
-            className="btn-secondary"
-            onClick={onClose}
-          >
+          <button className="btn-secondary" onClick={onClose}>
             Close
           </button>
+        </div>
+      </div>
+      <div className="hidden">
+        <div ref={receiptRef}>
+          <Voucher
+            cart={items.map((item) => ({
+              ...item,
+              quantity: item.quantity,
+              price: item.price,
+              total: item.total,
+            }))}
+            subtotal={
+              transaction.total - transaction.tax + transaction.discount
+            }
+            tax={transaction.tax}
+            discount={transaction.discount}
+            total={transaction.total}
+            customerName={transaction.customerName}
+          />
         </div>
       </div>
     </div>
@@ -267,116 +363,128 @@ const TransactionDetails: React.FC<TransactionDetailsProps> = ({
 const Transactions: React.FC = () => {
   const { db, isLoading } = useDatabase();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'all'>('week');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending' | 'cancelled'>('all');
-  const [sortDirection, setSortDirection] = useState<'desc' | 'asc'>('desc');
-  const [selectedTransaction, setSelectedTransaction] = useState<number | null>(null);
-  
+  const { businessSettings } = useSettings();
+  const [filteredTransactions, setFilteredTransactions] = useState<
+    Transaction[]
+  >([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [dateRange, setDateRange] = useState<
+    "today" | "week" | "month" | "all"
+  >("week");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "paid" | "pending" | "cancelled"
+  >("all");
+  const [sortDirection, setSortDirection] = useState<"desc" | "asc">("desc");
+  const [selectedTransaction, setSelectedTransaction] = useState<number | null>(
+    null
+  );
+
   // Load transactions
   useEffect(() => {
     const loadTransactions = async () => {
       if (!db) return;
-      
+
       try {
-        const allTransactions = await db.getAll('transactions');
-        
+        const allTransactions = await db.getAll("transactions");
+
         // Sort by date (newest first by default)
         allTransactions.sort((a, b) => {
           const dateA = new Date(a.createdAt);
           const dateB = new Date(b.createdAt);
-          return sortDirection === 'desc' ? dateB.getTime() - dateA.getTime() : dateA.getTime() - dateB.getTime();
+          return sortDirection === "desc"
+            ? dateB.getTime() - dateA.getTime()
+            : dateA.getTime() - dateB.getTime();
         });
-        
+
         setTransactions(allTransactions);
-        filterTransactions(allTransactions, searchTerm, dateRange, statusFilter);
+        filterTransactions(
+          allTransactions,
+          searchTerm,
+          dateRange,
+          statusFilter
+        );
       } catch (error) {
-        console.error('Error loading transactions:', error);
-        toast.error('Failed to load transaction data.');
+        console.error("Error loading transactions:", error);
+        toast.error("Failed to load transaction data.");
       }
     };
-    
+
     if (db && !isLoading) {
       loadTransactions();
     }
   }, [db, isLoading, sortDirection]);
-  
+
   // Filter transactions based on search, date range, and status
   const filterTransactions = (
     transactions: Transaction[],
     search: string,
-    date: 'today' | 'week' | 'month' | 'all',
-    status: 'all' | 'paid' | 'pending' | 'cancelled'
+    date: "today" | "week" | "month" | "all",
+    status: "all" | "paid" | "pending" | "cancelled"
   ) => {
     let filtered = [...transactions];
-    
+
     // Apply search filter
     if (search) {
       const lowerSearch = search.toLowerCase();
-      filtered = filtered.filter(tx => 
-        (tx.customerName?.toLowerCase().includes(lowerSearch) || 
-         tx.id?.toString().includes(search))
+      filtered = filtered.filter(
+        (tx) =>
+          tx.customerName?.toLowerCase().includes(lowerSearch) ||
+          tx.id?.toString().includes(search)
       );
     }
-    
+
     // Apply date filter
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    if (date === 'today') {
-      filtered = filtered.filter(tx => {
+
+    if (date === "today") {
+      filtered = filtered.filter((tx) => {
         const txDate = new Date(tx.createdAt);
         return txDate >= today;
       });
-    } else if (date === 'week') {
+    } else if (date === "week") {
       const weekStart = new Date(today);
       weekStart.setDate(today.getDate() - 7);
-      
-      filtered = filtered.filter(tx => {
+
+      filtered = filtered.filter((tx) => {
         const txDate = new Date(tx.createdAt);
         return txDate >= weekStart;
       });
-    } else if (date === 'month') {
+    } else if (date === "month") {
       const monthStart = new Date(today);
       monthStart.setMonth(today.getMonth() - 1);
-      
-      filtered = filtered.filter(tx => {
+
+      filtered = filtered.filter((tx) => {
         const txDate = new Date(tx.createdAt);
         return txDate >= monthStart;
       });
     }
-    
+
     // Apply status filter
-    if (status !== 'all') {
-      filtered = filtered.filter(tx => tx.paymentStatus === status);
+    if (status !== "all") {
+      filtered = filtered.filter((tx) => tx.paymentStatus === status);
     }
-    
+
     setFilteredTransactions(filtered);
   };
-  
+
   // Handle filter changes
   useEffect(() => {
     filterTransactions(transactions, searchTerm, dateRange, statusFilter);
   }, [searchTerm, dateRange, statusFilter, transactions]);
-  
+
   const toggleSortDirection = () => {
-    setSortDirection(prev => prev === 'desc' ? 'asc' : 'desc');
+    setSortDirection((prev) => (prev === "desc" ? "asc" : "desc"));
   };
-  
+
   const viewTransactionDetails = (id: number) => {
     setSelectedTransaction(id);
   };
-  
+
   const closeTransactionDetails = () => {
     setSelectedTransaction(null);
   };
-  
-  const handlePrintReceipt = () => {
-    // In a real application, this would integrate with a printing library or service
-    toast.info('Printing functionality would be implemented here');
-  };
-  
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -388,7 +496,7 @@ const Transactions: React.FC = () => {
   return (
     <div className="fade-in">
       <h1 className="text-2xl font-bold mb-6">Transactions</h1>
-      
+
       {/* Filters */}
       <div className="bg-white rounded-lg shadow-md p-4 mb-6">
         <div className="flex flex-col md:flex-row md:items-center space-y-3 md:space-y-0 md:space-x-3">
@@ -404,7 +512,7 @@ const Transactions: React.FC = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          
+
           <div className="w-full md:w-48">
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -422,7 +530,7 @@ const Transactions: React.FC = () => {
               </select>
             </div>
           </div>
-          
+
           <div className="w-full md:w-48">
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -440,12 +548,12 @@ const Transactions: React.FC = () => {
               </select>
             </div>
           </div>
-          
+
           <button
             className="btn-secondary md:flex-shrink-0 flex items-center justify-center"
             onClick={toggleSortDirection}
           >
-            {sortDirection === 'desc' ? (
+            {sortDirection === "desc" ? (
               <>
                 <ArrowDownWideNarrow className="w-4 h-4 mr-1" />
                 Newest First
@@ -459,7 +567,7 @@ const Transactions: React.FC = () => {
           </button>
         </div>
       </div>
-      
+
       {/* Transactions Table */}
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
         <div className="overflow-x-auto">
@@ -491,19 +599,19 @@ const Transactions: React.FC = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredTransactions.length > 0 ? (
-                filteredTransactions.map(tx => (
+                filteredTransactions.map((tx) => (
                   <tr key={tx.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                       #{tx.id}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                      {format(new Date(tx.createdAt), 'MMM d, yyyy h:mm a')}
+                      {format(new Date(tx.createdAt), "MMM d, yyyy h:mm a")}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                      {tx.customerName || 'Walk-in Customer'}
+                      {tx.customerName || "Walk-in Customer"}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
-                      {tx.paymentMethod === 'cash' ? (
+                      {tx.paymentMethod === "cash" ? (
                         <span className="inline-flex items-center">
                           <DollarSign className="w-4 h-4 mr-1 text-green-600" />
                           Cash
@@ -516,18 +624,22 @@ const Transactions: React.FC = () => {
                       )}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-center">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        tx.paymentStatus === 'paid' 
-                          ? 'bg-green-100 text-green-800' 
-                          : tx.paymentStatus === 'pending'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {tx.paymentStatus.charAt(0).toUpperCase() + tx.paymentStatus.slice(1)}
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          tx.paymentStatus === "paid"
+                            ? "bg-green-100 text-green-800"
+                            : tx.paymentStatus === "pending"
+                            ? "bg-yellow-100 text-yellow-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {tx.paymentStatus.charAt(0).toUpperCase() +
+                          tx.paymentStatus.slice(1)}
                       </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
-                      ${tx.total.toFixed(2)}
+                      {businessSettings.currencySymbol}
+                      {tx.total.toFixed(2)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                       <button
@@ -541,8 +653,12 @@ const Transactions: React.FC = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
-                    No transactions found. Adjust your filters or process a sale.
+                  <td
+                    colSpan={7}
+                    className="px-4 py-8 text-center text-gray-500"
+                  >
+                    No transactions found. Adjust your filters or process a
+                    sale.
                   </td>
                 </tr>
               )}
@@ -550,7 +666,7 @@ const Transactions: React.FC = () => {
           </table>
         </div>
       </div>
-      
+
       {/* Transaction Statistics */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
         <div className="bg-white rounded-lg shadow-md p-4">
@@ -559,12 +675,16 @@ const Transactions: React.FC = () => {
               <ClipboardList className="w-6 h-6" />
             </div>
             <div className="ml-4">
-              <h3 className="text-sm font-medium text-gray-500">Total Transactions</h3>
-              <p className="text-2xl font-semibold">{filteredTransactions.length}</p>
+              <h3 className="text-sm font-medium text-gray-500">
+                Total Transactions
+              </h3>
+              <p className="text-2xl font-semibold">
+                {filteredTransactions.length}
+              </p>
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white rounded-lg shadow-md p-4">
           <div className="flex items-center">
             <div className="p-3 rounded-full bg-green-100 text-green-600">
@@ -573,36 +693,45 @@ const Transactions: React.FC = () => {
             <div className="ml-4">
               <h3 className="text-sm font-medium text-gray-500">Total Sales</h3>
               <p className="text-2xl font-semibold">
-                ${filteredTransactions.reduce((sum, tx) => sum + tx.total, 0).toFixed(2)}
+                {businessSettings.currencySymbol}
+                {filteredTransactions
+                  .reduce((sum, tx) => sum + tx.total, 0)
+                  .toFixed(2)}
               </p>
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white rounded-lg shadow-md p-4">
           <div className="flex items-center">
             <div className="p-3 rounded-full bg-purple-100 text-purple-600">
               <CreditCard className="w-6 h-6" />
             </div>
             <div className="ml-4">
-              <h3 className="text-sm font-medium text-gray-500">Avg Transaction</h3>
+              <h3 className="text-sm font-medium text-gray-500">
+                Avg Transaction
+              </h3>
               <p className="text-2xl font-semibold">
-                ${filteredTransactions.length > 0 
-                  ? (filteredTransactions.reduce((sum, tx) => sum + tx.total, 0) / filteredTransactions.length).toFixed(2)
-                  : '0.00'
-                }
+                {businessSettings.currencySymbol}
+                {filteredTransactions.length > 0
+                  ? (
+                      filteredTransactions.reduce(
+                        (sum, tx) => sum + tx.total,
+                        0
+                      ) / filteredTransactions.length
+                    ).toFixed(2)
+                  : "0.00"}
               </p>
             </div>
           </div>
         </div>
       </div>
-      
+
       {/* Transaction Details Modal */}
       {selectedTransaction !== null && (
         <TransactionDetails
           transactionId={selectedTransaction}
           onClose={closeTransactionDetails}
-          onPrint={handlePrintReceipt}
         />
       )}
     </div>

@@ -1,10 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { useDatabase } from '../context/DatabaseContext';
-import { 
-  ShoppingCart, Package, AlertTriangle, TrendingUp,
-  DollarSign, BarChart2, Calendar, Clock
-} from 'lucide-react';
-import { Bar, Doughnut } from 'react-chartjs-2';
+import React, { useState, useEffect } from "react";
+import { useDatabase } from "../context/DatabaseContext";
+import { useSettings } from "../hooks/useSettings";
+import {
+  ShoppingCart,
+  Package,
+  AlertTriangle,
+  TrendingUp,
+  DollarSign,
+  BarChart2,
+  Calendar,
+  Clock,
+} from "lucide-react";
+import { Bar, Doughnut } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -14,8 +21,8 @@ import {
   Tooltip,
   Legend,
   ArcElement,
-} from 'chart.js';
-import { format } from 'date-fns';
+} from "chart.js";
+import { format } from "date-fns";
 
 ChartJS.register(
   CategoryScale,
@@ -29,6 +36,7 @@ ChartJS.register(
 
 const Dashboard: React.FC = () => {
   const { db, isLoading } = useDatabase();
+  const { businessSettings } = useSettings();
   const [productCount, setProductCount] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [todaySales, setTodaySales] = useState(0);
@@ -43,14 +51,14 @@ const Dashboard: React.FC = () => {
       },
     ],
   });
-  
+
   const [salesData, setSalesData] = useState<any>({
     labels: [],
     datasets: [
       {
-        label: 'Sales',
+        label: "Sales",
         data: [],
-        backgroundColor: 'rgba(37, 99, 235, 0.6)',
+        backgroundColor: "rgba(37, 99, 235, 0.6)",
       },
     ],
   });
@@ -58,25 +66,24 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const loadDashboardData = async () => {
       if (!db) return;
-      
+
       try {
         // Create a single transaction for all read operations
-        const tx = db.transaction(['products', 'stock', 'transactions', 'categories'], 'readonly');
-        const productsStore = tx.objectStore('products');
-        const stockStore = tx.objectStore('stock');
-        const transactionsStore = tx.objectStore('transactions');
-        const categoriesStore = tx.objectStore('categories');
-        const txIndex = transactionsStore.index('by-date');
+        const tx = db.transaction(
+          ["products", "stock", "transactions", "categories"],
+          "readonly"
+        );
+        const productsStore = tx.objectStore("products");
+        const stockStore = tx.objectStore("stock");
+        const transactionsStore = tx.objectStore("transactions");
+        const categoriesStore = tx.objectStore("categories");
+        const txIndex = transactionsStore.index("by-date");
 
         // Fetch all data within the transaction
-        const [
-          products,
-          stockItems,
-          categories
-        ] = await Promise.all([
+        const [products, stockItems, categories] = await Promise.all([
           productsStore.getAll(),
           stockStore.getAll(),
-          categoriesStore.getAll()
+          categoriesStore.getAll(),
         ]);
 
         // Get today's transactions
@@ -90,14 +97,16 @@ const Dashboard: React.FC = () => {
           const date = new Date();
           date.setDate(date.getDate() - i);
           date.setHours(0, 0, 0, 0);
-          
+
           const nextDay = new Date(date);
           nextDay.setDate(nextDay.getDate() + 1);
-          
-          const dailyTransactions = await txIndex.getAll(IDBKeyRange.bound(date, nextDay));
+
+          const dailyTransactions = await txIndex.getAll(
+            IDBKeyRange.bound(date, nextDay)
+          );
           pastWeekTx.push({
-            date: format(date, 'EEE'),
-            transactions: dailyTransactions
+            date: format(date, "EEE"),
+            transactions: dailyTransactions,
           });
         }
 
@@ -106,37 +115,38 @@ const Dashboard: React.FC = () => {
 
         // Now process the data
         setProductCount(products.length);
-        
-        const lowStock = stockItems.filter(item => item.quantity < 5);
+
+        const lowStock = stockItems.filter((item) => item.quantity < 5);
         setLowStockCount(lowStock.length);
-        
+
         setTodayTransactions(todayTx.length);
         setTodaySales(todayTx.reduce((sum, tx) => sum + tx.total, 0));
-        
-        const recentTx = todayTx.slice(0, 5).map(tx => ({
+
+        const recentTx = todayTx.slice(0, 5).map((tx) => ({
           id: tx.id,
-          date: format(tx.createdAt, 'HH:mm'),
+          date: format(tx.createdAt, "HH:mm"),
           total: tx.total,
-          status: tx.paymentStatus
+          status: tx.paymentStatus,
         }));
-        
+
         setRecentTransactions(recentTx);
-        
+
         // Process category data
-        const categoryLabels = categories.map(c => c.name);
-        const categoryCounts = categories.map(category => 
-          products.filter(p => p.categoryId === category.id).length
+        const categoryLabels = categories.map((c) => c.name);
+        const categoryCounts = categories.map(
+          (category) =>
+            products.filter((p) => p.categoryId === category.id).length
         );
-        
+
         const backgroundColors = [
-          'rgba(37, 99, 235, 0.8)',
-          'rgba(16, 185, 129, 0.8)',
-          'rgba(245, 158, 11, 0.8)',
-          'rgba(239, 68, 68, 0.8)',
-          'rgba(139, 92, 246, 0.8)',
-          'rgba(20, 184, 166, 0.8)',
+          "rgba(37, 99, 235, 0.8)",
+          "rgba(16, 185, 129, 0.8)",
+          "rgba(245, 158, 11, 0.8)",
+          "rgba(239, 68, 68, 0.8)",
+          "rgba(139, 92, 246, 0.8)",
+          "rgba(20, 184, 166, 0.8)",
         ];
-        
+
         setCategoryData({
           labels: categoryLabels,
           datasets: [
@@ -146,34 +156,33 @@ const Dashboard: React.FC = () => {
             },
           ],
         });
-        
+
         // Process sales data
-        const salesValues = pastWeekTx.map(day => 
+        const salesValues = pastWeekTx.map((day) =>
+          //@ts-ignore
           day.transactions.reduce((sum, tx) => sum + tx.total, 0)
         );
-        
+
         setSalesData({
-          labels: pastWeekTx.map(day => day.date),
+          labels: pastWeekTx.map((day) => day.date),
           datasets: [
             {
-              label: 'Sales',
+              label: "Sales",
               data: salesValues,
-              backgroundColor: 'rgba(37, 99, 235, 0.6)',
+              backgroundColor: "rgba(37, 99, 235, 0.6)",
             },
           ],
         });
-        
       } catch (error) {
-        console.error('Error loading dashboard data:', error);
+        console.error("Error loading dashboard data:", error);
       }
     };
-    
+
     if (db && !isLoading) {
       loadDashboardData();
     }
-    
   }, [db, isLoading]);
-  
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -185,7 +194,7 @@ const Dashboard: React.FC = () => {
   return (
     <div className="space-y-6 fade-in">
       <h1 className="text-2xl font-bold">Dashboard</h1>
-      
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <div className="card flex items-center">
@@ -197,7 +206,7 @@ const Dashboard: React.FC = () => {
             <p className="text-2xl font-semibold">{productCount}</p>
           </div>
         </div>
-        
+
         <div className="card flex items-center">
           <div className="p-3 rounded-full bg-amber-100 text-amber-600">
             <AlertTriangle className="w-6 h-6" />
@@ -207,17 +216,20 @@ const Dashboard: React.FC = () => {
             <p className="text-2xl font-semibold">{lowStockCount}</p>
           </div>
         </div>
-        
+
         <div className="card flex items-center">
           <div className="p-3 rounded-full bg-green-100 text-green-600">
             <DollarSign className="w-6 h-6" />
           </div>
           <div className="ml-4">
             <p className="text-sm font-medium text-gray-500">Today's Sales</p>
-            <p className="text-2xl font-semibold">${todaySales.toFixed(2)}</p>
+            <p className="text-2xl font-semibold">
+              {businessSettings.currencySymbol}
+              {todaySales.toFixed(2)}
+            </p>
           </div>
         </div>
-        
+
         <div className="card flex items-center">
           <div className="p-3 rounded-full bg-purple-100 text-purple-600">
             <ShoppingCart className="w-6 h-6" />
@@ -228,7 +240,7 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
-      
+
       {/* Charts */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="card">
@@ -240,8 +252,8 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="h-64">
-            <Bar 
-              data={salesData} 
+            <Bar
+              data={salesData}
               options={{
                 responsive: true,
                 maintainAspectRatio: false,
@@ -251,52 +263,55 @@ const Dashboard: React.FC = () => {
                   },
                   tooltip: {
                     callbacks: {
-                      label: function(context) {
+                      label: function (context) {
                         return `$${context.raw}`;
-                      }
-                    }
-                  }
+                      },
+                    },
+                  },
                 },
                 scales: {
                   y: {
                     beginAtZero: true,
-                  }
-                }
+                  },
+                },
               }}
             />
           </div>
         </div>
-        
+
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold">Product Categories</h2>
           </div>
           <div className="h-64 flex items-center justify-center">
-            <Doughnut 
+            <Doughnut
               data={categoryData}
               options={{
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
                   legend: {
-                    position: 'right',
-                  }
+                    position: "right",
+                  },
                 },
               }}
             />
           </div>
         </div>
       </div>
-      
+
       {/* Recent Transactions */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Recent Transactions</h2>
-          <a href="/transactions" className="text-sm text-blue-600 hover:text-blue-800">
+          <a
+            href="/transactions"
+            className="text-sm text-blue-600 hover:text-blue-800"
+          >
             View all
           </a>
         </div>
-        
+
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -329,16 +344,19 @@ const Dashboard: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                      ${tx.total.toFixed(2)}
+                      {businessSettings.currencySymbol}
+                      {tx.total.toFixed(2)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        tx.status === 'paid' 
-                          ? 'bg-green-100 text-green-800' 
-                          : tx.status === 'pending'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          tx.status === "paid"
+                            ? "bg-green-100 text-green-800"
+                            : tx.status === "pending"
+                            ? "bg-yellow-100 text-yellow-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
                         {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
                       </span>
                     </td>
@@ -346,7 +364,10 @@ const Dashboard: React.FC = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={4} className="px-4 py-3 text-sm text-gray-500 text-center">
+                  <td
+                    colSpan={4}
+                    className="px-4 py-3 text-sm text-gray-500 text-center"
+                  >
                     No transactions today
                   </td>
                 </tr>
@@ -355,31 +376,43 @@ const Dashboard: React.FC = () => {
           </table>
         </div>
       </div>
-      
+
       {/* Quick Actions */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <a href="/sales" className="card flex flex-col items-center p-5 hover:bg-gray-50 cursor-pointer transition-colors">
+        <a
+          href="/sales"
+          className="card flex flex-col items-center p-5 hover:bg-gray-50 cursor-pointer transition-colors"
+        >
           <div className="p-3 rounded-full bg-blue-100 text-blue-600 mb-3">
             <ShoppingCart className="w-6 h-6" />
           </div>
           <h3 className="font-medium">New Sale</h3>
         </a>
-        
-        <a href="/products" className="card flex flex-col items-center p-5 hover:bg-gray-50 cursor-pointer transition-colors">
+
+        <a
+          href="/products"
+          className="card flex flex-col items-center p-5 hover:bg-gray-50 cursor-pointer transition-colors"
+        >
           <div className="p-3 rounded-full bg-green-100 text-green-600 mb-3">
             <Package className="w-6 h-6" />
           </div>
           <h3 className="font-medium">Add Product</h3>
         </a>
-        
-        <a href="/inventory" className="card flex flex-col items-center p-5 hover:bg-gray-50 cursor-pointer transition-colors">
+
+        <a
+          href="/inventory"
+          className="card flex flex-col items-center p-5 hover:bg-gray-50 cursor-pointer transition-colors"
+        >
           <div className="p-3 rounded-full bg-amber-100 text-amber-600 mb-3">
             <BarChart2 className="w-6 h-6" />
           </div>
           <h3 className="font-medium">Update Stock</h3>
         </a>
-        
-        <a href="/transactions" className="card flex flex-col items-center p-5 hover:bg-gray-50 cursor-pointer transition-colors">
+
+        <a
+          href="/transactions"
+          className="card flex flex-col items-center p-5 hover:bg-gray-50 cursor-pointer transition-colors"
+        >
           <div className="p-3 rounded-full bg-purple-100 text-purple-600 mb-3">
             <TrendingUp className="w-6 h-6" />
           </div>

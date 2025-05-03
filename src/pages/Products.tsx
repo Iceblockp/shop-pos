@@ -18,6 +18,7 @@ import {
   ChevronLeft,
 } from "lucide-react";
 import { toast } from "react-toastify";
+import { useSettings } from "../hooks/useSettings";
 
 // ProductModal component for adding/editing products
 interface ProductModalProps {
@@ -37,6 +38,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
   suppliers,
   onSave,
 }) => {
+  const { businessSettings } = useSettings();
   const [formData, setFormData] = useState<Partial<Product>>({
     name: "",
     barcode: "",
@@ -144,7 +146,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
 
               <div>
                 <label htmlFor="price" className="label">
-                  Selling Price ($)
+                  Selling Price ({businessSettings.currencySymbol})
                 </label>
                 <input
                   type="number"
@@ -161,7 +163,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
 
               <div>
                 <label htmlFor="cost" className="label">
-                  Cost Price ($)
+                  Cost Price ({businessSettings.currencySymbol})
                 </label>
                 <input
                   type="number"
@@ -264,6 +266,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
 
 const Products: React.FC = () => {
   const { db, isLoading } = useDatabase();
+  const { businessSettings } = useSettings();
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -602,7 +605,7 @@ const Products: React.FC = () => {
                     className="flex items-center focus:outline-none"
                     onClick={() => handleSort("price")}
                   >
-                    <span>Price</span>
+                    <span>Price ({businessSettings.currencySymbol})</span>
                     {sortField === "price" && (
                       <ArrowUpDown
                         className={`ml-1 w-4 h-4 ${
@@ -656,7 +659,7 @@ const Products: React.FC = () => {
                       {getCategoryName(product.categoryId)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">
-                      ${product.price.toFixed(2)}
+                      {product.price.toFixed(2)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                       {getSupplierName(product.supplierId)}
