@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
-import { ScanLine } from 'lucide-react';
-import { useDatabase } from '../context/DatabaseContext';
-import { toast } from 'react-toastify';
+import React, { useState } from "react";
+import { ScanLine, X } from "lucide-react";
+import { BarcodeScan } from "./BarcodeScan";
 
 interface BarcodeData {
   barcodeData: string;
@@ -13,74 +12,53 @@ declare global {
   }
 }
 
-const BarcodeScanner: React.FC = () => {
-  const [isScanning, setIsScanning] = useState(false);
-  const { db } = useDatabase();
-  
-  const startScanning = () => {
-    setIsScanning(true);
-    
-    // This would connect to a real barcode scanner or camera in a production app
-    // For demo purposes, we'll simulate a barcode scan after a timeout
-    
-    window.onScanDetected = async ({ barcodeData }) => {
-      if (db && barcodeData) {
-        try {
-          const tx = db.transaction('products', 'readonly');
-          const index = tx.store.index('by-barcode');
-          const product = await index.get(barcodeData);
-          
-          if (product) {
-            toast.success(`Found: ${product.name}`, {
-              position: "top-right",
-              autoClose: 2000,
-            });
-            // In a real app, we'd likely add this product to a cart or trigger some other action
-          } else {
-            toast.warning(`No product found with barcode: ${barcodeData}`, {
-              position: "top-right",
-              autoClose: 2000,
-            });
-          }
-        } catch (error) {
-          console.error('Error looking up barcode:', error);
-          toast.error('Error scanning barcode. Please try again.');
-        }
-      }
-      
-      setIsScanning(false);
-    };
-    
-    // Simulate a scan for demo purposes
-    setTimeout(() => {
-      if (window.onScanDetected) {
-        window.onScanDetected({ barcodeData: '8901234567890' });
-      }
-    }, 2000);
-  };
-  
-  const simulateScan = async () => {
-    if (!isScanning) {
-      startScanning();
-    }
-  };
+type BarCodeScannerProps = {
+  onScan: (barcode: string) => void;
+  onError: (error: Error) => void;
+};
+
+const BarcodeScanner: React.FC<BarCodeScannerProps> = ({ onScan, onError }) => {
+  const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <button
-      className={`relative p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-        isScanning ? 'bg-blue-100 text-blue-600' : 'text-gray-500 hover:bg-gray-100'
-      }`}
-      onClick={simulateScan}
-      title="Scan Barcode"
-    >
-      <ScanLine className="w-5 h-5" />
-      {isScanning && (
-        <span className="absolute top-0 right-0 flex h-3 w-3">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
-        </span>
+    <>
+      <button
+        className={`relative p-2 rounded-full  text-gray-500 hover:bg-gray-100 `}
+        onClick={() => setIsOpen(!isOpen)}
+        title="Scan Barcode"
+        type="button"
+      >
+        <ScanLine className="w-5 h-5" />
+      </button>
+      {isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold">Barcode Scan</h2>
+              <button
+                className="text-gray-500 hover:text-gray-700"
+                onClick={() => setIsOpen(false)}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className=" p-2">
+              <BarcodeScan
+                onScan={(barcode) => {
+                  onScan(barcode);
+                  setIsOpen(false);
+                }}
+                onError={(error) => {
+                  console.error("Scanner error:", error);
+                  onError(error);
+                  setIsOpen(false);
+                }}
+              />
+            </div>
+          </div>
+        </div>
       )}
-    </button>
+    </>
   );
 };
 

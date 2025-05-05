@@ -1,13 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Search, CreditCard, DollarSign, ShoppingCart } from "lucide-react";
+import {
+  Search,
+  CreditCard,
+  DollarSign,
+  ShoppingCart,
+  QrCode,
+} from "lucide-react";
 import { useReactToPrint } from "react-to-print";
-import { Product } from "../context/DatabaseContext";
 import { useSales, CartItem } from "../hooks/useSales";
 import { ProductCard } from "../components/ProductCard";
 import { CartItem as CartItemComponent } from "../components/CartItem";
 import { Receipt } from "../components/Receipt";
 import { ProductWithStock } from "../hooks/useInventory";
 import { useSettings } from "../hooks/useSettings";
+import { toast } from "react-toastify";
+import { BarcodeScan } from "../components/BarcodeScan";
 
 const Sales: React.FC = () => {
   const { products, categories, isLoading, processCheckout } = useSales();
@@ -26,6 +33,7 @@ const Sales: React.FC = () => {
   const { businessSettings } = useSettings();
 
   const receiptRef = useRef<HTMLDivElement>(null);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   // Filter products based on search and category
   useEffect(() => {
@@ -52,15 +60,15 @@ const Sales: React.FC = () => {
   // Calculate totals whenever cart changes
   useEffect(() => {
     const cartSubtotal = cart.reduce((sum, item) => sum + item.total, 0);
-    const cartTax = cartSubtotal * 0.1; // 10% tax
+    const cartTax = (cartSubtotal * businessSettings.taxRate) / 100; // Use tax rate from settings
     const cartTotal = cartSubtotal + cartTax - discount;
 
     setSubtotal(cartSubtotal);
     setTax(cartTax);
     setTotal(cartTotal);
-  }, [cart, discount]);
+  }, [cart, discount, businessSettings.taxRate]); // Add taxRate to dependencies
 
-  const addToCart = (product: Product) => {
+  const addToCart = (product: ProductWithStock) => {
     setCart((prevCart) => {
       const existingItemIndex = prevCart.findIndex(
         (item) => item.id === product.id
@@ -69,9 +77,24 @@ const Sales: React.FC = () => {
       if (existingItemIndex >= 0) {
         const updatedCart = [...prevCart];
         const item = updatedCart[existingItemIndex];
+
+        // Check if adding one more would exceed stock
+        if (item.quantity + 1 > product.stockQuantity) {
+          toast.error(
+            `Cannot exceed available stock (${product.stockQuantity} items)`
+          );
+          return prevCart;
+        }
+
         item.quantity += 1;
         item.total = item.price * item.quantity;
         return updatedCart;
+      }
+
+      // Check if product has stock available
+      if (product.stockQuantity < 1) {
+        toast.error("This product is out of stock");
+        return prevCart;
       }
 
       return [
@@ -79,6 +102,7 @@ const Sales: React.FC = () => {
         {
           ...product,
           quantity: 1,
+          stock: product.stockQuantity,
           total: product.price,
         },
       ];
@@ -140,6 +164,21 @@ const Sales: React.FC = () => {
     );
   }
 
+  const handleBarcodeScan = (barcode: string) => {
+    console.log("code are", barcode, products);
+    const product = products.find((p) => p.barcode == barcode);
+    if (product) {
+      if (product.stockQuantity > 0) {
+        addToCart(product);
+        setIsScannerOpen(false);
+      } else {
+        toast.error("This product is out of stock");
+      }
+    } else {
+      toast.error("Product not found");
+    }
+  };
+
   return (
     <div className="h-full">
       <h1 className="text-2xl font-bold mb-6">Point of Sale</h1>
@@ -160,6 +199,13 @@ const Sales: React.FC = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
+            <button
+              className="flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              onClick={() => setIsScannerOpen(true)}
+            >
+              <QrCode className="h-5 w-5 mr-2" />
+              Scan Barcode
+            </button>
             <select
               className="block w-full sm:w-48 px-3 py-2 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               value={selectedCategory || ""}
@@ -185,7 +231,7 @@ const Sales: React.FC = () => {
                   <ProductCard
                     key={product.id}
                     product={product}
-                    onSelect={addToCart}
+                    onSelect={() => addToCart(product)}
                   />
                 ))
               ) : (
@@ -210,7 +256,7 @@ const Sales: React.FC = () => {
                 {cart.map((item) => (
                   <CartItemComponent
                     key={item.id}
-                    item={item}
+                    item={{ ...item, stock: item.stock }}
                     onUpdateQuantity={updateQuantity}
                     onRemove={removeFromCart}
                   />
@@ -236,7 +282,9 @@ const Sales: React.FC = () => {
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Tax (10%):</span>
+                <span className="text-sm text-gray-600">
+                  Tax ({businessSettings.taxRate.toFixed(0)}%):
+                </span>
                 <span className="text-sm font-medium">
                   {businessSettings.currencySymbol}
                   {tax.toFixed(2)}
@@ -327,6 +375,30 @@ const Sales: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Barcode Scanner Modal */}
+      {isScannerOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-4 w-full max-w-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">Scan Barcode</h2>
+              <button
+                className="text-gray-500 hover:text-gray-700"
+                onClick={() => setIsScannerOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <BarcodeScan
+              onScan={handleBarcodeScan}
+              onError={(error) => {
+                console.error("Barcode scanning error:", error);
+                toast.error("Failed to scan barcode. Please try again.");
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Hidden Receipt Template */}
       <div className="hidden">

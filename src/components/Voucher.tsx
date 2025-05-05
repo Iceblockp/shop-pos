@@ -105,3 +105,30 @@ export const Voucher: React.FC<ReceiptProps> = ({
     </div>
   );
 };
+
+// "use client";
+// import React from "react";
+// import { put,del } from "@vercel/blob";
+
+// const Page = () => {
+//   const handleOnChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+//     const file = e.target.files?.[0];
+
+//     if (!file) return;
+//     const { url } = await put("articles/blob.png", file, {
+//       access: "public",
+//       //   token: process.env?.BLOB_READ_WRITE_TOKEN,
+//       token: "vercel_blob_rw_L38xsthkTiDuuJ7x_HgBjPnEgtabZB3qiuPIDDpsLoPDyYo",
+//     });
+//     del("articles/blob.png")
+//     console.log(url);
+//   };
+//   return (
+//     <div>
+//       storage Page
+//       <input type="file" name="image" onChange={handleOnChange} id="" />
+//     </div>
+//   );
+// };
+
+// export default Page;

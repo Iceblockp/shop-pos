@@ -1,16 +1,12 @@
 import { useState, useEffect } from "react";
-import {
-  useDatabase,
-  Product,
-  Transaction,
-  TransactionItem,
-} from "../context/DatabaseContext";
+import { useDatabase, Product, Transaction } from "../context/DatabaseContext";
 import { toast } from "react-toastify";
 import { ProductWithStock } from "./useInventory";
 
 export interface CartItem extends Product {
   quantity: number;
   total: number;
+  stock: number;
 }
 
 export const useSales = () => {

@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { toast } from "react-toastify";
 import { useSettings } from "../hooks/useSettings";
+import { BarcodeGenerator } from "../components/BarcodeGenerator";
+import BarcodeScanner from "../components/BarcodeScanner";
 
 // ProductModal component for adding/editing products
 interface ProductModalProps {
@@ -49,6 +51,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
     supplierId: suppliers.length > 0 ? suppliers[0].id : undefined,
     imageUrl: "",
   });
+  const [isBarcodeDialogOpen, setIsBarcodeDialogOpen] = useState(false);
 
   useEffect(() => {
     if (product) {
@@ -133,15 +136,25 @@ const ProductModal: React.FC<ProductModalProps> = ({
                 <label htmlFor="barcode" className="label">
                   Barcode
                 </label>
-                <input
-                  type="text"
-                  id="barcode"
-                  name="barcode"
-                  className="input w-full"
-                  value={formData.barcode}
-                  onChange={handleChange}
-                  required
-                />
+                <div className=" flex gap-2 ">
+                  <input
+                    type="text"
+                    id="barcode"
+                    name="barcode"
+                    className="input flex-1 w-full"
+                    value={formData.barcode}
+                    onChange={handleChange}
+                    required
+                  />
+                  <BarcodeScanner
+                    onScan={(barcode) =>
+                      setFormData({ ...formData, barcode: barcode })
+                    }
+                    onError={(error) => {
+                      console.log(error);
+                    }}
+                  />
+                </div>
               </div>
 
               <div>
@@ -249,6 +262,15 @@ const ProductModal: React.FC<ProductModalProps> = ({
               </div>
             </div>
           </div>
+          {formData.barcode && (
+            <div className=" ">
+              <BarcodeGenerator
+                height={30}
+                fontSize={8}
+                value={formData.barcode}
+              />
+            </div>
+          )}
 
           <div className="mt-6 flex justify-end space-x-3">
             <button type="button" className="btn-secondary" onClick={onClose}>
@@ -512,13 +534,21 @@ const Products: React.FC = () => {
     <div className="fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Products</h1>
-        <button
-          className="btn-primary flex items-center mt-3 sm:mt-0"
-          onClick={openAddModal}
-        >
-          <Plus className="w-5 h-5 mr-1" />
-          Add Product
-        </button>
+        <div className="flex gap-2 items-center">
+          <BarcodeScanner
+            onScan={(barcode) => setSearchTerm(barcode)}
+            onError={(error) => {
+              console.log(error);
+            }}
+          />
+          <button
+            className="btn-primary flex items-center mt-3 sm:mt-0"
+            onClick={openAddModal}
+          >
+            <Plus className="w-5 h-5 mr-1" />
+            Add Product
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

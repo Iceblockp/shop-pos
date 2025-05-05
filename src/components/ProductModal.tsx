@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Product, Category, Supplier } from "../context/DatabaseContext";
 import { X } from "lucide-react";
 import { toast } from "react-toastify";
+import { BarcodeGenerator } from "./BarcodeGenerator";
 
 interface ProductModalProps {
   isOpen: boolean;
