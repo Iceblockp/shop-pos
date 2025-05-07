@@ -1,17 +1,16 @@
-import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
-import Products from './pages/Products';
-import Categories from './pages/Categories';
-import Sales from './pages/Sales';
-import Inventory from './pages/Inventory';
-import Suppliers from './pages/Suppliers';
-import Transactions from './pages/Transactions';
-import Settings from './pages/Settings';
-import { DatabaseProvider } from './context/DatabaseContext';
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { Routes, Route, Navigate } from "react-router-dom";
+import Layout from "./components/Layout";
+import Dashboard from "./pages/Dashboard";
+import Products from "./pages/Products";
+import Categories from "./pages/Categories";
+import Sales from "./pages/Sales";
+import Inventory from "./pages/Inventory";
+import Suppliers from "./pages/Suppliers";
+import Transactions from "./pages/Transactions";
+import Settings from "./pages/Settings";
+import { DatabaseProvider } from "./context/DatabaseContext";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 function App() {
   return (
