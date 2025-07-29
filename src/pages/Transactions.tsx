@@ -378,6 +378,21 @@ const Transactions: React.FC = () => {
   const [selectedTransaction, setSelectedTransaction] = useState<number | null>(
     null
   );
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredTransactions.slice(
+    indexOfFirstItem,
+    indexOfLastItem
+  );
+  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
+
+  // Pagination controls
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+  };
 
   // Load transactions
   useEffect(() => {
@@ -413,6 +428,11 @@ const Transactions: React.FC = () => {
       loadTransactions();
     }
   }, [db, isLoading, sortDirection]);
+
+  useEffect(() => {
+    filterTransactions(transactions, searchTerm, dateRange, statusFilter);
+    setCurrentPage(1); // Reset to first page when filters change
+  }, [searchTerm, dateRange, statusFilter, transactions]);
 
   // Filter transactions based on search, date range, and status
   const filterTransactions = (
@@ -598,8 +618,8 @@ const Transactions: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredTransactions.length > 0 ? (
-                filteredTransactions.map((tx) => (
+              {currentItems.length > 0 ? (
+                currentItems.map((tx) => (
                   <tr key={tx.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                       #{tx.id}
@@ -664,6 +684,47 @@ const Transactions: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+        {/* Pagination Controls */}
+        <div className="px-4 py-3 border-t border-gray-200 bg-white">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-700">
+              Showing {indexOfFirstItem + 1} to{" "}
+              {Math.min(indexOfLastItem, filteredTransactions.length)} of{" "}
+              {filteredTransactions.length} entries
+            </div>
+            <div className="flex space-x-1">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="px-3 py-1 rounded-md text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                (number) => (
+                  <button
+                    key={number}
+                    onClick={() => handlePageChange(number)}
+                    className={`px-3 py-1 rounded-md text-sm font-medium ${
+                      currentPage === number
+                        ? "bg-blue-600 text-white"
+                        : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    {number}
+                  </button>
+                )
+              )}
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 rounded-md text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

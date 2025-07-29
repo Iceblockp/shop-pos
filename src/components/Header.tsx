@@ -1,6 +1,5 @@
 import React from "react";
 import { Menu, Search, Bell } from "lucide-react";
-import BarcodeScanner from "./BarcodeScanner";
 
 interface HeaderProps {
   toggleSidebar: () => void;
@@ -36,12 +35,10 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
           />
         </div> */}
 
-        {/* <BarcodeScanner /> */}
-
-        <button className="relative p-1 text-gray-500 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        {/* <button className="relative p-1 text-gray-500 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
           <Bell className="w-6 h-6" />
           <span className="absolute top-0 right-0 block w-2 h-2 bg-red-500 rounded-full"></span>
-        </button>
+        </button> */}
 
         <button className="flex items-center text-sm focus:outline-none">
           <img

@@ -120,6 +120,7 @@ export const useSales = () => {
 
       await tx.done;
       toast.success("Sale completed successfully.");
+      await loadData();
       return true;
     } catch (error) {
       console.error("Error during checkout:", error);

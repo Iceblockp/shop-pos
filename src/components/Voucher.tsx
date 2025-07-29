@@ -55,7 +55,9 @@ export const Voucher: React.FC<ReceiptProps> = ({
 
         {cart.map((item) => (
           <div key={item.id} className="flex justify-between text-sm mb-1">
-            <span className="flex-1">{item.product.name}</span>
+            <span className="flex-1">
+              {item.product ? item.product.name : "unknown"}
+            </span>
             <div className="flex space-x-4">
               <span className="w-10 text-right">{item.quantity}</span>
               <span className="w-14 text-right">{item.price.toFixed(2)}</span>
